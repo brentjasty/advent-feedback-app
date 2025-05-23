@@ -1,22 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import Swal from 'sweetalert2';
 import '../assets/styles.css';
-
-const questions = [
-  '01. Overall quality of the event content',
-  '02. Organization and structure of the event',
-  '03. Speaker/facilitator performance',
-  '04. Speaker engagement with the audience',
-  '05. Event logistics and coordination',
-  '06. Technical setup (audio, visuals, tools)',
-  '07. Event engagement and interest level',
-  '08. Likelihood of joining future S.I.T.E. events',
-  '09. Learning or personal gain from the event',
-  '10. Relevance to academic or personal interests'
-];
 
 const EventFeedbacks = () => {
   const { eventId } = useParams();
@@ -24,9 +11,21 @@ const EventFeedbacks = () => {
   const navigate = useNavigate();
 
   const [feedbacks, setFeedbacks] = useState([]);
+  const [questions, setQuestions] = useState([]);
   const eventName = location.state?.eventName || 'Unknown Event';
 
   useEffect(() => {
+    const fetchQuestions = async () => {
+      const snapshot = await getDocs(collection(db, 'events', eventId, 'questions'));
+      const questionList = snapshot.docs.map(doc => doc.data().text);
+      questionList.sort((a, b) => {
+        const numA = parseInt(a.split('.')[0]);
+        const numB = parseInt(b.split('.')[0]);
+        return numA - numB;
+      });
+      setQuestions(questionList);
+    };
+
     const fetchFeedbacks = async () => {
       try {
         const q = query(collection(db, 'feedbacks'), where('eventId', '==', eventId));
@@ -38,39 +37,45 @@ const EventFeedbacks = () => {
       }
     };
 
+    fetchQuestions();
     fetchFeedbacks();
   }, [eventId]);
 
-  const handleDelete = async (id) => {
+  const handleArchive = async (feedback) => {
     const confirm = await Swal.fire({
-      title: 'Are you sure?',
-      text: 'This will permanently delete the feedback.',
-      icon: 'warning',
+      title: 'Archive this feedback?',
+      text: 'This will move the feedback to the archive.',
+      icon: 'question',
       showCancelButton: true,
-      confirmButtonColor: '#e74c3c',
+      confirmButtonColor: '#f39c12',
       cancelButtonColor: '#3085d6',
-      confirmButtonText: 'Yes, delete it!',
+      confirmButtonText: 'Yes, archive it!',
+      position: 'center'
     });
 
     if (confirm.isConfirmed) {
       try {
-        await deleteDoc(doc(db, 'feedbacks', id));
-        setFeedbacks(prev => prev.filter(f => f.id !== id));
+        await addDoc(collection(db, 'archived_feedbacks'), feedback);
+        await deleteDoc(doc(db, 'feedbacks', feedback.id));
+        setFeedbacks(prev => prev.filter(f => f.id !== feedback.id));
+
         Swal.fire({
           icon: 'success',
-          title: 'Deleted!',
-          text: 'Feedback has been deleted.',
+          title: 'Archived!',
+          text: 'Feedback has been archived.',
           showConfirmButton: false,
           timer: 1500,
+          position: 'center'
         });
       } catch (error) {
-        console.error('Delete failed:', error);
+        console.error('Archiving failed:', error);
         Swal.fire({
           icon: 'error',
           title: 'Error',
-          text: 'Failed to delete feedback.',
+          text: 'Failed to archive feedback.',
           showConfirmButton: false,
           timer: 1500,
+          position: 'center'
         });
       }
     }
@@ -93,6 +98,10 @@ const EventFeedbacks = () => {
             <img src="/images/manage_events.png" alt="Manage Events" />
             <span>Manage Events</span>
           </li>
+          <li onClick={() => navigate('/admin/archived-events')}>
+            <img src="/images/archive.png" alt="Archived Events" />
+            <span>Archived Events</span>
+          </li>
           <li onClick={() => navigate('/admin/add-event')}>
             <img src="/images/add_events.png" alt="Add Event" />
             <span>Add Event</span>
@@ -103,7 +112,19 @@ const EventFeedbacks = () => {
 
       {/* Main Content */}
       <div className="main-content">
-        <h2 style={{ marginBottom: '20px' }}>Feedback for: {eventName}</h2>
+        <h2 style={{ marginBottom: '10px' }}>Feedback for: {eventName}</h2>
+
+        {/* View Archived Feedbacks Button */}
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            className="btn btn-secondary"
+            onClick={() => navigate(`/admin/archived-feedbacks/${eventId}`, {
+              state: { eventName }
+            })}
+          >
+            View Archived Feedbacks
+          </button>
+        </div>
 
         {feedbacks.length > 0 ? (
           <div className="feedback-grid">
@@ -126,8 +147,8 @@ const EventFeedbacks = () => {
                   ))}
                 </div>
 
-                <button className="delete-btn" onClick={() => handleDelete(feedback.id)}>
-                  Delete Feedback
+                <button className="delete-btn" onClick={() => handleArchive(feedback)}>
+                  Archive Feedback
                 </button>
               </div>
             ))}
