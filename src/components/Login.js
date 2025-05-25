@@ -91,7 +91,7 @@ function Login() {
           </div>
           <button type="submit">Login</button>
           <div className="form-links">
-            <a href="#">Forgot Password?</a> | <a href="/register">Register</a>
+           
           </div>
         </form>
       </div>
